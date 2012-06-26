@@ -17,10 +17,11 @@ Jeweler::Tasks.new do |gem|
   gem.name = "worker"
   gem.homepage = "http://github.com/rgeyer/worker"
   gem.license = "MIT"
-  gem.summary = %Q{TODO: one-line summary of your gem}
-  gem.description = %Q{TODO: longer description of your gem}
+  gem.summary = %Q{Processes video transcoding jobs that transcode_controller added to an AMQP job list}
+  gem.description = gem.summary
   gem.email = "me@ryangeyer.com"
   gem.authors = ["Ryan J. Geyer"]
+  gem.executables << 'gio_2012_worker'
   # dependencies defined in Gemfile
 end
 Jeweler::RubygemsDotOrgTasks.new
