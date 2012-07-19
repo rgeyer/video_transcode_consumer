@@ -14,14 +14,14 @@ require 'rake'
 require 'jeweler'
 Jeweler::Tasks.new do |gem|
   # gem is a Gem::Specification... see http://docs.rubygems.org/read/chapter/20 for more options
-  gem.name = "worker"
-  gem.homepage = "http://github.com/rgeyer/worker"
+  gem.name = "transcode_consumer"
+  gem.homepage = "http://github.com/rgeyer/transcode_consumer"
   gem.license = "MIT"
-  gem.summary = %Q{Processes video transcoding jobs that transcode_controller added to an AMQP job list}
+  gem.summary = %Q{Processes video transcoding jobs that transcode_producer added to an AMQP job list}
   gem.description = gem.summary
   gem.email = "me@ryangeyer.com"
   gem.authors = ["Ryan J. Geyer"]
-  gem.executables << 'gio_2012_worker'
+  gem.executables << 'transcode_consumer'
   # dependencies defined in Gemfile
 end
 Jeweler::RubygemsDotOrgTasks.new
@@ -44,7 +44,7 @@ Rake::RDocTask.new do |rdoc|
   version = File.exist?('VERSION') ? File.read('VERSION') : ""
 
   rdoc.rdoc_dir = 'rdoc'
-  rdoc.title = "worker #{version}"
+  rdoc.title = "transcode_consumer #{version}"
   rdoc.rdoc_files.include('README*')
   rdoc.rdoc_files.include('lib/**/*.rb')
 end

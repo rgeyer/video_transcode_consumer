@@ -29,13 +29,13 @@ require 'digest/md5'
 require 'posix/spawn'
 
 module RGeyer
-  class Worker
+  class TranscodeConsumer
 
     class DownloadError < Exception; end
     class TranscodeError < Exception; end
     class UploadError < Exception; end
 
-    # Initializes a worker object
+    # Initializes a transcode_consumer object
     #
     # === Parameters
     # amqp_hostname(String):: The hostname of the AMQP server hosting input, output, and error queues
@@ -51,7 +51,7 @@ module RGeyer
       @output_queue_name = options[:output_queue_name] || 'encode_output'
       @error_queue_name = options[:error_queue_name] || 'encode_error'
 
-      @logger = options[:logger] || Logger.new("/var/log/gio_2012_worker-#{$$}.log")
+      @logger = options[:logger] || Logger.new("/var/log/transode_consumer-#{$$}.log")
 
       @gstore_bucket_name = gstore_bucket_name
 
