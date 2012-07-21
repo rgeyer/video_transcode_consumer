@@ -2,6 +2,9 @@
 
 require 'rubygems'
 require 'bundler'
+require 'rspec/core/rake_task'
+require 'rake/gempackagetask'
+require 'rake/clean'
 begin
   Bundler.setup(:default, :development)
 rescue Bundler::BundlerError => e
@@ -11,33 +14,56 @@ rescue Bundler::BundlerError => e
 end
 require 'rake'
 
-require 'jeweler'
-Jeweler::Tasks.new do |gem|
-  # gem is a Gem::Specification... see http://docs.rubygems.org/read/chapter/20 for more options
-  gem.name = "transcode_consumer"
-  gem.homepage = "http://github.com/rgeyer/transcode_consumer"
-  gem.license = "MIT"
-  gem.summary = %Q{Processes video transcoding jobs that transcode_producer added to an AMQP job list}
-  gem.description = gem.summary
-  gem.email = "me@ryangeyer.com"
-  gem.authors = ["Ryan J. Geyer"]
-  gem.executables << 'transcode_consumer'
-  # dependencies defined in Gemfile
-end
-Jeweler::RubygemsDotOrgTasks.new
-
-require 'rspec/core'
-require 'rspec/core/rake_task'
-RSpec::Core::RakeTask.new(:spec) do |spec|
-  spec.pattern = FileList['spec/**/*_spec.rb']
+desc 'Package gem'
+gemtask = Rake::GemPackageTask.new(Gem::Specification.load('transcode_consumer.gemspec')) do |package|
+  package.package_dir = 'pkg'
+  package.need_zip = true
+  package.need_tar = true
 end
 
-RSpec::Core::RakeTask.new(:rcov) do |spec|
-  spec.pattern = 'spec/**/*_spec.rb'
-  spec.rcov = true
+directory gemtask.package_dir
+
+CLEAN.include(gemtask.package_dir)
+
+# == Unit tests == #
+spec_opts_file = "\"#{File.dirname(__FILE__)}/spec/spec.opts\""
+RSPEC_OPTS = ['--options', spec_opts_file]
+
+desc 'Run unit tests'
+RSpec::Core::RakeTask.new do |t|
+  t.rspec_opts = RSPEC_OPTS
 end
 
-task :default => :spec
+namespace :spec do
+  desc 'Run unit tests with RCov'
+  RSpec::Core::RakeTask.new(:rcov) do |t|
+    t.rspec_opts = RSPEC_OPTS
+    t.rcov = true
+    t.rcov_opts = %q[--exclude "spec"]
+  end
+
+  desc 'Print Specdoc for all unit tests'
+  RSpec::Core::RakeTask.new(:doc) do |t|
+    t.rspec_opts = ["--format", "documentation"]
+  end
+end
+
+require 'rake/testtask'
+Rake::TestTask.new(:test) do |test|
+  test.libs << 'lib' << 'test'
+  test.pattern = 'test/**/test_*.rb'
+  test.verbose = true
+end
+
+require 'rcov/rcovtask'
+Rcov::RcovTask.new do |test|
+  test.libs << 'test'
+  test.pattern = 'test/**/test_*.rb'
+  test.verbose = true
+  test.rcov_opts << '--exclude "gems/*"'
+end
+
+task :default => :test
 
 require 'rdoc/task'
 Rake::RDocTask.new do |rdoc|
