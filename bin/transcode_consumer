@@ -24,7 +24,7 @@
 require 'trollop'
 require 'json'
 
-require File.expand_path(File.join(File.dirname(__FILE__), '..', 'lib', 'worker'))
+require File.expand_path(File.join(File.dirname(__FILE__), '..', 'lib', 'transcode_consumer'))
 
 opts = Trollop::options do
   banner = "A simple worker for a batch video transcoding grid application"
@@ -44,7 +44,7 @@ worker_opts = opts
 worker_opts[:user] = opts[:amqp_username] if opts[:amqp_username]
 worker_opts[:pass] = opts[:amqp_password] if opts[:amqp_password]
 
-worker_opts[:logger] = Logger.new("/var/log/gio_2012_worker-#{$$}.log")
+worker_opts[:logger] = Logger.new("/var/log/transcode_consumer-#{$$}.log")
 
 case opts[:log_level]
   when 'info'
@@ -61,7 +61,7 @@ case opts[:log_level]
     worker_opts[:logger].level = Logger::INFO
 end
 
-worker = RGeyer::Worker.new(opts[:amqp_host], opts[:gstorage_bucket], worker_opts)
+worker = RGeyer::TranscodeConsumer.new(opts[:amqp_host], opts[:gstorage_bucket], worker_opts)
 
 while true
   if worker.do_job
