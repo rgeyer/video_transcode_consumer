@@ -55,7 +55,6 @@ module RGeyer
 
       @gstore_bucket_name = gstore_bucket_name
 
-      @gstore = Fog::Storage.new({:provider => 'Google'})
       @bunny = Bunny.new(options)
       @bunny.start
       @input_queue  = @bunny.queue(@input_queue_name)
@@ -81,7 +80,6 @@ module RGeyer
       if job['type'] == 'rss' && job['object']['media_content_url']
         exceptions = []
         source_tmpfile = get_temp_filename
-        dest_tmpfile = get_temp_filename "#{Digest::MD5.hexdigest(job['object']['media_content_url'])}.mp4"
         begin
           @logger.debug("Beginning download of #{job['object']['media_content_url']} to #{source_tmpfile}")
           download_file job['object']['media_content_url'], source_tmpfile
@@ -93,6 +91,7 @@ module RGeyer
         job['handbrake_presets'].each do |handbrake_preset|
           @logger.info("Transcoding #{job['object']['media_content_url']} with HandBrake preset #{handbrake_preset}")
           begin
+            dest_tmpfile = get_temp_filename "#{Digest::MD5.hexdigest(job['object']['media_content_url'])}-#{Time.now.to_i}.mp4"
             transcode_file source_tmpfile, dest_tmpfile, handbrake_preset
             upload_file "#{job['object']['media_title']}/#{handbrake_preset}.mp4", dest_tmpfile
             File.delete(dest_tmpfile) if File.exist? dest_tmpfile
@@ -264,7 +263,8 @@ EOF
     def upload_file(dest_pathname, source_file)
       raise UploadError.new("The source file #{source_file} does not exist") unless File.exist? source_file
       begin
-        @gstore.put_object(@gstore_bucket_name, dest_pathname, File.open(source_file, 'r'))
+        gstore = Fog::Storage.new({:provider => 'Google'})
+        gstore.put_object(@gstore_bucket_name, dest_pathname, File.open(source_file, 'r'))
       rescue Excon::Errors::Error => e
         raise UploadError.new("Upload to Google Storage failed with: #{e.inspect}")
       end
