@@ -264,7 +264,9 @@ EOF
       raise UploadError.new("The source file #{source_file} does not exist") unless File.exist? source_file
       begin
         gstore = Fog::Storage.new({:provider => 'Google'})
-        gstore.put_object(@gstore_bucket_name, dest_pathname, File.open(source_file, 'r'))
+        File.open(source_file, 'r') do |file|
+          gstore.put_object(@gstore_bucket_name, dest_pathname, file)
+        end
       rescue Excon::Errors::Error => e
         raise UploadError.new("Upload to Google Storage failed with: #{e.inspect}")
       end
