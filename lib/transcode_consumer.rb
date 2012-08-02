@@ -24,6 +24,7 @@ require 'json'
 require 'bunny'
 require 'tmpdir'
 require 'net/http'
+require 'fileutils'
 require 'logger'
 require 'digest/md5'
 require 'posix/spawn'
@@ -39,21 +40,18 @@ module RGeyer
     #
     # === Parameters
     # amqp_hostname(String):: The hostname of the AMQP server hosting input, output, and error queues
-    # gstore_bucket_name(String):: The name of the Google Storage bucket which will be used to store the transcoded videos
     # options(Hash):: A hash of options.  Possible options are;
     #   :input_queue(String) - The name of the AMQP input queue
     #   :output_queue(String) - The name of the AMQP output queue
     #   :error_queue(String) - The name of the AMQP error queue
     #   Any option available to the bunny client initializer : https://github.com/ruby-amqp/bunny/blob/master/lib/bunny/client.rb#L8
-    def initialize(amqp_hostname, gstore_bucket_name, options={})
+    def initialize(amqp_hostname, options={})
       options.merge!({:host => amqp_hostname})
       @input_queue_name = options[:input_queue_name] || 'encode_input'
       @output_queue_name = options[:output_queue_name] || 'encode_output'
       @error_queue_name = options[:error_queue_name] || 'encode_error'
 
       @logger = options[:logger] || Logger.new("/var/log/transode_consumer-#{$$}.log")
-
-      @gstore_bucket_name = gstore_bucket_name
 
       @bunny = Bunny.new(options)
       @bunny.start
@@ -93,20 +91,34 @@ module RGeyer
           begin
             dest_tmpfile = get_temp_filename "#{Digest::MD5.hexdigest(job['object']['media_content_url'])}-#{Time.now.to_i}.mp4"
             transcode_file source_tmpfile, dest_tmpfile, handbrake_preset
-            upload_file "#{job['object']['media_title']}/#{handbrake_preset}.mp4", dest_tmpfile
-            File.delete(dest_tmpfile) if File.exist? dest_tmpfile
+            # XXX The output type could be set explicitly (like the input type
+            # is) so you don't have to guess at what it is.
+            if job['output'] =~ /^\//
+              orig_filename = job['object']['media_title'].gsub(/\s+/, '_') # Replace spaces with underscores
+              dest_filename = "#{job['output']}/#{orig_filename}_#{handbrake_preset}.mp4"
+
+              @logger.debug("Moving `#{dest_tmpfile}' to `#{dest_filename}'")
+              FileUtils.mkdir(job['output']) unless File.directory?(job['output'])
+              FileUtils.mv(dest_tmpfile, dest_filename)
+            else
+              @logger.debug("Uploading #{dest_tmpfile} to Google Storage")
+              upload_file job['output'], "#{job['object']['media_title']}/#{handbrake_preset}.mp4", dest_tmpfile
+              File.delete(dest_tmpfile) if File.exist? dest_tmpfile
+            end
           rescue Exception => e
             #publish_to_error_queue job, e
             exceptions << e
           end
         end
         if exceptions.length > 0
+          @logger.debug("Publishing failed job to error queue")
           publish_to_error_queue job, exceptions
         else
+          @logger.debug("Publishing completed job to output queue")
           File.delete(source_tmpfile) if File.exist? source_tmpfile
-          publish_to_output_queue job, @gstore_bucket_name
+          publish_to_output_queue(job)
         end
-      end
+      end #if (job['type'] == 'rss')
       true
     end
 
@@ -152,11 +164,10 @@ EOF
     #
     # === Parameters
     # input_job(Hash):: The original job object
-    # gstore_bucket_name(String):: The name of the Google Storage bucket that contains the completed job
     #
-    def publish_to_output_queue(input_job, gstore_bucket_name)
+    def publish_to_output_queue(input_job)
       @output_exchange.publish(
-        {:input_job => input_job, :gstore_bucket_name => gstore_bucket_name}.to_json,
+        {:input_job => input_job}.to_json,
         :key => @output_queue_name
       )
     end
@@ -173,7 +184,7 @@ EOF
     def download_file(source_uri, dest_filepath, redirect_count=0)
       begin
         uri = URI(source_uri)
-      rescue URI::InvalidURIError => e
+      rescue URI::InvalidURIError
         raise DownloadError.new("#{source_uri} is not a valid download URI")
       end
       Net::HTTP.start(uri.host, uri.port) { |http|
@@ -220,20 +231,18 @@ EOF
 HandBrakeCLI exitted with #{child.status.exitstatus};
 
 STDOUT:
-#{child.out}
+#{child.out.gsub(/\r/,"\n")}
 
 STDERR:
 #{child.err}
 EOF
-
-
       @logger.debug(debug_message)
 
       message = <<EOF
 HandBrakeCLI execution failed with the following output.
 
 STDOUT:
-#{child.out}
+#{child.out.gsub(/\r/,"\n")}
 
 STDERR:
 #{child.err}
@@ -255,17 +264,18 @@ EOF
     # Uploads a file from disk to Google Storage
     #
     # === Parameters
+    # gstore_bucket_name(String):: The name of the Google Storage bucket to upload to
     # dest_pathname(String):: The path and file name that will be stored in the Google Storage bucket.
     # source_file(String):: The full local file path of the file to upload to Google Storage
     #
     # === Raise
     # UploadError:: on any failure to upload to Google Storage
-    def upload_file(dest_pathname, source_file)
+    def upload_file(gstore_bucket_name, dest_pathname, source_file)
       raise UploadError.new("The source file #{source_file} does not exist") unless File.exist? source_file
       begin
         gstore = Fog::Storage.new({:provider => 'Google'})
         File.open(source_file, 'r') do |file|
-          gstore.put_object(@gstore_bucket_name, dest_pathname, file)
+          gstore.put_object(gstore_bucket_name, dest_pathname, file)
         end
       rescue Excon::Errors::Error => e
         raise UploadError.new("Upload to Google Storage failed with: #{e.inspect}")

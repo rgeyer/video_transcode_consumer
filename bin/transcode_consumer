@@ -36,7 +36,7 @@ opts = Trollop::options do
   opt :output_queue_name, "The name of the output queue on the AMQP server", :default => 'encode_output'
   opt :error_queue_name, "The name of the error queue on the AMQP server", :default => 'encode_error'
   opt :log_level, "The ruby logger logging level", :default => 'info'
-  opt :gstorage_bucket, "The name of the Google Storage bucket where the source video files reside", :type => :string, :required => true
+  #opt :gstorage_bucket, "The name of the Google Storage bucket where the source video files reside", :type => :string, :required => true
 end
 
 worker_opts = opts
@@ -61,7 +61,7 @@ case opts[:log_level]
     worker_opts[:logger].level = Logger::INFO
 end
 
-worker = RGeyer::TranscodeConsumer.new(opts[:amqp_host], opts[:gstorage_bucket], worker_opts)
+worker = RGeyer::TranscodeConsumer.new(opts[:amqp_host], worker_opts)
 
 while true
   if worker.do_job
